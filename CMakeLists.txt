@@ -5,7 +5,7 @@ file(READ ${CMAKE_CURRENT_SOURCE_DIR}/props.json PROPS)
 string(JSON VER GET ${PROPS} version)
 
 project(cmdrunner
-  DESCRIPTION "Run commands."
+  DESCRIPTION "A dmenu/rofi-compatible command runner in the terminal."
   VERSION ${VER})
 
 set(CMAKE_CXX_STANDARD 26)

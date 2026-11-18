@@ -1,6 +1,6 @@
 # Agent guide
 
-cmdrunner is a brand-new project — currently **only the scaffold exists**: CMake + Ninja build, packaging (deb/rpm/PKGBUILD), a stc-style builds workflow and a placeholder `main`. **The feature set is not pinned down yet** — before implementing anything, ask the owner what cmdrunner is supposed to do. The `project` DESCRIPTION ("Run commands."), the PKGBUILD `pkgdesc` and the README are placeholders until then.
+cmdrunner is a dmenu/rofi-compatible command runner inside the terminal: it reads choices one per line from stdin, shows a filterable menu on /dev/tty and prints the picked line to stdout — a drop-in replacement for `rofi -dmenu`/dmenu scripts, so rapidmenu works with it unchanged. Interaction is dmenu-like (type to filter, arrows/vim j-k, Enter, Esc) with dnf-style colors: cyan bold prompt, a dim `[n/total]` counter and a highlighted selection. Written in C++26 on CMake and Ninja, no external dependencies.
 
 Cross-session handoff notes for this project live in `~/.local/share/agents/cmdrunner-handoff.md`. Read that file first when resuming after a context reset, and update it when state changes (commits, queue changes, new gotchas).
 
@@ -10,7 +10,9 @@ Sibling repos with the same conventions: `~/dev/programming/rapidmenu` and `~/de
 
 | Part | Where | Notes |
 |---|---|---|
-| Entry | `src/main.cpp` | Placeholder — prints a notice and exits 0. Sources are globbed from `src/` recursively, so new files need no CMake edit. |
+| Entry and args | `src/main.cpp` | Reads stdin lines (the choices), parses dmenu/rofi flags: `-p`/`--prompt` sets the prompt; a known value-taking flag (`-theme`, `-l`, `-m`, `-fn`, `-nb`, `-nf`, `-sb`, `-sf`, `-config`) skips its value; every other flag (`-dmenu`, `-show-icons`, ...) is ignored. Calls `pick` and prints the choice to stdout; exit 0 on pick, 1 on cancel/empty stdin/no terminal. |
+| Menu | `src/menu.cpp` | `pick` is the whole interaction: case-insensitive substring filter, a window over the filtered list sized to the terminal, dnf-style rendering (cyan bold prompt, dim counter, reverse-video selected row), and the key handling: Enter picks, plain Esc / Ctrl-C / Ctrl-D cancel (`cancelled` exception), arrows and j/k/Ctrl-N/Ctrl-P move, backspace and Ctrl-U edit the query. Escape sequences that arrive split across reads are completed with a VTIME peek read. |
+| Terminal | `src/terminal.cpp` | RAII over `/dev/tty`: open read+write, raw mode (no echo/canonical/signals), saved termios restored on destruction; `rows`/`cols` via `TIOCGWINSZ` with 24x80 fallback. |
 | Version | `props.json` | Single `"version"` key, read by CMake at configure time and by the PKGBUILD's `pkgver()`. Bump it for every release, and update the `line-count` file (cloc over `src/`) in the same commit. |
 
 ## Build and install
@@ -42,12 +44,22 @@ makepkg -si PKGBUILD       # Arch
 ## Before pushing
 
 - `make all` builds clean.
-- `USAGE`/`HELP` strings (once they exist) match the flags actually implemented.
+- A `-p <prompt>` run with rofi-style flags picked an item (or cancelled) — verify the compatibility contract: stdin in, pick out, exit 0 on pick / 1 on cancel.
 - `props.json`, `line-count` and any packaging metadata agree on the version.
 
 ## Code style
 
-- C++26 (`set(CMAKE_CXX_STANDARD 26)`), target `cmdrunner`, sources globbed from `src/` recursively.
-- Indentation is a mix of 2 and 4 spaces in the sibling repos; match the file you are editing rather than reformatting.
-- Errors: plain `exit(1)` with stderr prints unless a better pattern establishes itself; keep new errors consistent with their file.
-- No test suite exists. Verification is manual.
+- C++26 (`set(CMAKE_CXX_STANDARD 26)`), target `cmdrunner`, sources globbed from `src/` recursively — a new file needs no CMake edit.
+- Indentation is a mix of 2 and 4 spaces across files; match the file you are editing rather than reformatting.
+- Errors: plain `exit(1)` with stderr prints, `throw` for fatal setup failures (caught in `main.cpp`); keep new errors consistent with their file.
+- No test suite exists. Verification is manual: `socat` can fake the pty — `(sleep 1; printf '\r') | socat - 'EXEC:<script that pipes items into cmdrunner>,pty,ctty,setsid,raw,echo=0'`.
+
+## Gotchas
+
+- **stdin carries the choices, /dev/tty carries the keys and the drawing** — stdin is a pipe in the rapidmenu flow (already consumed), so keyboard input must never be read from stdin.
+- The selection goes to stdout, the menu UI to /dev/tty — that split is what lets rapidmenu's `popen` capture the pick while the user sees the menu.
+- When stdout is piped (rapidmenu's flow) everything still works: the menu draws on /dev/tty regardless.
+- `/dev/tty` missing (no controlling terminal) exits 1 with a message — never abort.
+- A new CMake project needs the full CPack block (`include(CPack)`, vendor/maintainer, `CPACK_GENERATOR`) or `cpack -G DEB` fails in CI with `CPack project name not specified` — this cost the first cmdrunner CI run.
+- The `latest` git tag on the remote is created/moved by the rolling release, not a version tag — don't confuse them.
+- ubuntu-24.04's default g++ cannot take `-std=c++26` — the workflow pins g++-14.
