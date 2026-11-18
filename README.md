@@ -10,6 +10,9 @@ so it is a drop-in replacement for `rofi -dmenu` and dmenu scripts.
   executes the picked one, like `dmenu_run`.
 - **Piped run** (dmenu contract): choices one per line from stdin, the
   selection printed to stdout, exit 0 on a pick and 1 on Escape.
+- The menu takes the full terminal window with the search on top by default;
+  pass `-no-fullscreen` for a compact inline menu instead (`-fullscreen`
+  switches it back — both are rofi-style flags).
 - rofi/dmenu flags are accepted and ignored (`-dmenu`, `-show-icons`,
   `-theme <file>`, `-l <n>`, colors, fonts...); `-p <prompt>` sets the prompt.
 - Anything that pipes choices into `rofi -dmenu` works with cmdrunner.

@@ -74,6 +74,7 @@ std::string shellquote(const std::string &value) {
 
 int main(int argc, char **argv) {
     std::string prompt;
+    bool fullscreen = true;
 
     // rofi/dmenu compatibility: -p takes the prompt, flags known to take a
     // value are skipped together with it, every other flag is ignored.
@@ -83,6 +84,14 @@ int main(int argc, char **argv) {
             if (i + 1 < argc) {
                 prompt = argv[++i];
             }
+            continue;
+        }
+        if (arg == "-fullscreen" || arg == "--fullscreen") {
+            fullscreen = true;
+            continue;
+        }
+        if (arg == "-no-fullscreen" || arg == "--no-fullscreen") {
+            fullscreen = false;
             continue;
         }
 
@@ -119,7 +128,7 @@ int main(int argc, char **argv) {
     }
 
     try {
-        const std::string choice = pick(items, prompt);
+        const std::string choice = pick(items, prompt, fullscreen);
         if (launcher) {
             const int rc = system(("sh -c " + shellquote(choice)).c_str());
             if (rc != 0) {

@@ -42,7 +42,7 @@ std::string visible(const std::string &s, int width) {
 
 } // namespace
 
-std::string pick(const std::vector<std::string> &items, const std::string &prompt) {
+std::string pick(const std::vector<std::string> &items, const std::string &prompt, const bool fullscreen) {
     terminal tty;
     const int fd = tty.fd();
 
@@ -50,7 +50,7 @@ std::string pick(const std::vector<std::string> &items, const std::string &promp
     std::string result;
     bool done = false;
     bool cancelledrun = false;
-    int drawn = 0; // lines the last frame occupied; the cursor rests at the end of the last one
+    int drawn = 0; // inline layout only: lines the last frame occupied
 
     std::vector<size_t> filtered;
     size_t sel = 0;
@@ -71,7 +71,7 @@ std::string pick(const std::vector<std::string> &items, const std::string &promp
     };
 
     auto height = [&]() {
-        int h = tty.rows() - 2; // item lines + the info line + the prompt line
+        int h = tty.rows() - 2; // the prompt line + the info line + the item lines
         return h < 1 ? 1 : h;
     };
 
@@ -89,9 +89,13 @@ std::string pick(const std::vector<std::string> &items, const std::string &promp
                text.substr(pos + query.size());
     };
 
+    // cmdrunner owns the whole terminal window, fzf --layout=reverse style:
+    // the prompt on top, the info line under it, the items below.
     auto draw = [&]() {
         std::string frame;
-        if (drawn > 0) {
+        if (fullscreen) {
+            frame += "\x1b[H\x1b[J";
+        } else if (drawn > 0) {
             frame += "\r\x1b[" + std::to_string(drawn - 1) + "A\x1b[J";
         }
         frame += "\x1b[?25l";
@@ -106,34 +110,55 @@ std::string pick(const std::vector<std::string> &items, const std::string &promp
 
         const int width = tty.cols() - 1;
         const size_t end = std::min(filtered.size(), offset + static_cast<size_t>(h));
-        for (size_t i = offset; i < end; ++i) {
-            frame += "\n";
+
+        auto itemline = [&](size_t i) {
             const std::string text = visible(items[filtered[i]], width - 2);
             if (i == sel) {
-                frame += "\x1b[1;38;5;141;48;5;236m\xe2\x96\x8c\x1b[48;5;236m \x1b[1;38;5;254m" +
-                         highlight(text, "\x1b[38;5;141m", "\x1b[22;38;5;254m") + "\x1b[K\x1b[0m";
-            } else {
-                frame += "\x1b[38;5;236m\xe2\x96\x8c\x1b[0m " +
-                         highlight(text, "\x1b[1;38;5;141m", "\x1b[22;39m") + "\x1b[K";
+                return "\x1b[1;38;5;141;48;5;236m\xe2\x96\x8c\x1b[48;5;236m \x1b[1;38;5;254m" +
+                       highlight(text, "\x1b[38;5;141m", "\x1b[22;38;5;254m") + "\x1b[K\x1b[0m";
             }
-        }
+            return "\x1b[38;5;236m\xe2\x96\x8c\x1b[0m " +
+                   highlight(text, "\x1b[1;38;5;141m", "\x1b[22;39m") + "\x1b[K";
+        };
 
-        // the info line and the prompt live at the bottom, fzf style
         const std::string count = std::to_string(filtered.size()) + "/" + std::to_string(items.size());
         std::string rule;
         for (int i = 0; i < tty.cols() - 3 - static_cast<int>(count.size()); ++i) {
             rule += "\xe2\x94\x80";
         }
-        frame += "\n  \x1b[38;5;141m" + count + "\x1b[38;5;60m " + rule + "\x1b[0m\x1b[K";
+        const std::string inforow = "  \x1b[38;5;141m" + count + "\x1b[38;5;60m " + rule + "\x1b[0m\x1b[K";
 
         const std::string pfx = prompt.empty() ? "> " : (prompt.back() == ' ' ? prompt + "> " : prompt + " >");
-        frame += "\n\x1b[1;38;5;141m" + pfx + "\x1b[0m\x1b[1m" + query + "\x1b[K\x1b[?25h";
+        const std::string promptrow = "\x1b[1;38;5;141m" + pfx + "\x1b[0m\x1b[1m" + query + "\x1b[K";
 
-        drawn = 2 + static_cast<int>(end - offset);
+        if (fullscreen) {
+            // prompt on top, info under it, the item area padded to fill the window
+            frame += promptrow + "\n" + inforow;
+            for (size_t i = offset; i < end; ++i) {
+                frame += "\n" + itemline(i);
+            }
+            for (int i = static_cast<int>(end - offset); i < h; ++i) {
+                frame += "\n\x1b[K";
+            }
+            // the cursor belongs on the prompt line, right after the query
+            frame += "\x1b[1;" + std::to_string(pfx.size() + 1) + "H\x1b[?25h";
+        } else {
+            // inline: the items, then the info line, then the prompt at the bottom
+            for (size_t i = offset; i < end; ++i) {
+                frame += "\n" + itemline(i);
+            }
+            frame += "\n" + inforow + "\n" + promptrow + "\x1b[?25h";
+            drawn = 2 + static_cast<int>(end - offset);
+        }
+
         writeall(fd, frame);
     };
 
     auto cleanup = [&]() {
+        if (fullscreen) {
+            writeall(fd, "\x1b[H\x1b[J\x1b[" + std::to_string(tty.rows()) + ";1H\x1b[?25h");
+            return;
+        }
         std::string out;
         if (drawn > 0) {
             out = "\r\x1b[" + std::to_string(drawn - 1) + "A\x1b[J";

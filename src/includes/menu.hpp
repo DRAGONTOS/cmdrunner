@@ -8,6 +8,8 @@
 struct cancelled {};
 
 // shows the dmenu-style picker on /dev/tty and returns the picked line.
-std::string pick(const std::vector<std::string> &items, const std::string &prompt);
+// fullscreen owns the whole terminal window with the prompt on top (fzf
+// --layout=reverse style); otherwise the menu renders inline at the cursor.
+std::string pick(const std::vector<std::string> &items, const std::string &prompt, bool fullscreen);
 
 #endif
