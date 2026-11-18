@@ -74,7 +74,7 @@ std::string shellquote(const std::string &value) {
 
 int main(int argc, char **argv) {
     std::string prompt;
-    bool fullscreen = true;
+    bool reverse = true; // --layout=reverse is the default
 
     // rofi/dmenu compatibility: -p takes the prompt, flags known to take a
     // value are skipped together with it, every other flag is ignored.
@@ -86,13 +86,26 @@ int main(int argc, char **argv) {
             }
             continue;
         }
-        if (arg == "-fullscreen" || arg == "--fullscreen") {
-            fullscreen = true;
+        if (arg == "--layout=reverse") {
+            reverse = true;
             continue;
         }
-        if (arg == "-no-fullscreen" || arg == "--no-fullscreen") {
-            fullscreen = false;
+        if (arg == "--layout=default") {
+            reverse = false;
             continue;
+        }
+        if (arg == "--layout" && i + 1 < argc) {
+            const std::string value = argv[i + 1];
+            if (value == "reverse") {
+                reverse = true;
+                ++i;
+                continue;
+            }
+            if (value == "default") {
+                reverse = false;
+                ++i;
+                continue;
+            }
         }
 
         for (const std::string takesvalue : {"-theme", "-l", "-m", "-fn", "-nb", "-nf", "-sb", "-sf", "-config"}) {
@@ -128,7 +141,7 @@ int main(int argc, char **argv) {
     }
 
     try {
-        const std::string choice = pick(items, prompt, fullscreen);
+        const std::string choice = pick(items, prompt, reverse);
         if (launcher) {
             const int rc = system(("sh -c " + shellquote(choice)).c_str());
             if (rc != 0) {

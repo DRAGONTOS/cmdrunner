@@ -42,7 +42,7 @@ std::string visible(const std::string &s, int width) {
 
 } // namespace
 
-std::string pick(const std::vector<std::string> &items, const std::string &prompt, const bool fullscreen) {
+std::string pick(const std::vector<std::string> &items, const std::string &prompt, const bool reverse) {
     terminal tty;
     const int fd = tty.fd();
 
@@ -93,7 +93,7 @@ std::string pick(const std::vector<std::string> &items, const std::string &promp
     // the prompt on top, the info line under it, the items below.
     auto draw = [&]() {
         std::string frame;
-        if (fullscreen) {
+        if (reverse) {
             frame += "\x1b[H\x1b[J";
         } else if (drawn > 0) {
             frame += "\r\x1b[" + std::to_string(drawn - 1) + "A\x1b[J";
@@ -131,7 +131,7 @@ std::string pick(const std::vector<std::string> &items, const std::string &promp
         const std::string pfx = prompt.empty() ? "> " : (prompt.back() == ' ' ? prompt + "> " : prompt + " >");
         const std::string promptrow = "\x1b[1;38;5;141m" + pfx + "\x1b[0m\x1b[1m" + query + "\x1b[K";
 
-        if (fullscreen) {
+        if (reverse) {
             // prompt on top, info under it, the item area padded to fill the window
             frame += promptrow + "\n" + inforow;
             for (size_t i = offset; i < end; ++i) {
@@ -155,7 +155,7 @@ std::string pick(const std::vector<std::string> &items, const std::string &promp
     };
 
     auto cleanup = [&]() {
-        if (fullscreen) {
+        if (reverse) {
             writeall(fd, "\x1b[H\x1b[J\x1b[" + std::to_string(tty.rows()) + ";1H\x1b[?25h");
             return;
         }
