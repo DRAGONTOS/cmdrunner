@@ -10,7 +10,7 @@ Sibling repos with the same conventions: `~/dev/programming/rapidmenu` and `~/de
 
 | Part | Where | Notes |
 |---|---|---|
-| Entry and args | `src/main.cpp` | Reads stdin lines (the choices), parses dmenu/rofi flags: `-p`/`--prompt` sets the prompt; a known value-taking flag (`-theme`, `-l`, `-m`, `-fn`, `-nb`, `-nf`, `-sb`, `-sf`, `-config`) skips its value; every other flag (`-dmenu`, `-show-icons`, ...) is ignored. Calls `pick` and prints the choice to stdout; exit 0 on pick, 1 on cancel/empty stdin/no terminal. |
+| Entry and args | `src/main.cpp` | Reads stdin lines (the choices) when stdin is piped; **bare run lists the `$PATH` executables** (deduped, sorted) and executes the picked command via `sh -c` — `dmenu_run` behavior. Piped run keeps the dmenu contract: pick printed to stdout, exit 0 on pick, 1 on cancel/empty stdin/no terminal. Parses dmenu/rofi flags: `-p`/`--prompt` sets the prompt; a known value-taking flag (`-theme`, `-l`, `-m`, `-fn`, `-nb`, `-nf`, `-sb`, `-sf`, `-config`) skips its value; every other flag (`-dmenu`, `-show-icons`, ...) is ignored. |
 | Menu | `src/menu.cpp` | `pick` is the whole interaction: case-insensitive substring filter, a window over the filtered list sized to the terminal, dnf-style rendering (cyan bold prompt, dim counter, reverse-video selected row), and the key handling: Enter picks, plain Esc / Ctrl-C / Ctrl-D cancel (`cancelled` exception), arrows and j/k/Ctrl-N/Ctrl-P move, backspace and Ctrl-U edit the query. Escape sequences that arrive split across reads are completed with a VTIME peek read. |
 | Terminal | `src/terminal.cpp` | RAII over `/dev/tty`: open read+write, raw mode (no echo/canonical/signals), saved termios restored on destruction; `rows`/`cols` via `TIOCGWINSZ` with 24x80 fallback. |
 | Version | `props.json` | Single `"version"` key, read by CMake at configure time and by the PKGBUILD's `pkgver()`. Bump it for every release, and update the `line-count` file (cloc over `src/`) in the same commit. |
@@ -56,7 +56,7 @@ makepkg -si PKGBUILD       # Arch
 
 ## Gotchas
 
-- **stdin carries the choices, /dev/tty carries the keys and the drawing** — stdin is a pipe in the rapidmenu flow (already consumed), so keyboard input must never be read from stdin.
+- **stdin carries the choices, /dev/tty carries the keys and the drawing** — stdin is a pipe in the rapidmenu flow (already consumed), so keyboard input must never be read from stdin. The mode split is `isatty(0)`: tty stdin → PATH launcher that executes; piped stdin → print-only dmenu contract.
 - The selection goes to stdout, the menu UI to /dev/tty — that split is what lets rapidmenu's `popen` capture the pick while the user sees the menu.
 - When stdout is piped (rapidmenu's flow) everything still works: the menu draws on /dev/tty regardless.
 - `/dev/tty` missing (no controlling terminal) exits 1 with a message — never abort.
