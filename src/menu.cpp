@@ -7,7 +7,6 @@
 #include <cstring>
 #include <string>
 #include <unistd.h>
-
 namespace {
 
 std::string lower(const std::string &s) {
@@ -70,8 +69,61 @@ std::string pick(const std::vector<std::string> &items, const std::string &promp
         offset = 0;
     };
 
+    // a VTIME-bounded read to complete escape sequences split across reads
+    auto peekread = [&](unsigned char *out, size_t size) -> ssize_t {
+        termios peek{};
+        tcgetattr(fd, &peek);
+        peek.c_cc[VMIN] = 0;
+        peek.c_cc[VTIME] = 1;
+        tcsetattr(fd, TCSANOW, &peek);
+        ssize_t m = ::read(fd, out, size);
+        peek.c_cc[VMIN] = 1;
+        peek.c_cc[VTIME] = 0;
+        tcsetattr(fd, TCSANOW, &peek);
+        return m;
+    };
+
+    // ask the terminal for the cursor row (\x1b[6n -> ESC [ row ; col R) so the
+    // menu can fit below the prompt without scrolling it away; -1 when the
+    // terminal does not answer
+    auto cursorrow = [&]() -> int {
+        writeall(fd, "\x1b[6n");
+        std::string reply;
+        for (int tries = 0; tries < 5; ++tries) {
+            unsigned char buf[16];
+            const ssize_t m = peekread(buf, sizeof(buf));
+            if (m > 0) {
+                reply.append(reinterpret_cast<const char *>(buf), static_cast<size_t>(m));
+                if (reply.find('R') != std::string::npos) {
+                    break;
+                }
+            }
+        }
+        const size_t esc = reply.find("\x1b[");
+        if (esc == std::string::npos) {
+            return -1;
+        }
+        size_t at = esc + 2;
+        int row = 0;
+        bool any = false;
+        while (at < reply.size() && std::isdigit(static_cast<unsigned char>(reply[at]))) {
+            row = row * 10 + (reply[at] - '0');
+            ++at;
+            any = true;
+        }
+        return any ? row : -1;
+    };
+
+    // lines strictly below the prompt line; -1 when unknown
+    const int cursorrowat = cursorrow();
+    const int avail = cursorrowat > 0 ? tty.rows() - cursorrowat : -1;
+
     auto height = [&]() {
         int h = tty.rows() - 2; // the prompt line + the info line + the item lines
+        if (avail >= 0) {
+            // never scroll the prompt away: cap the items to the space below it
+            h = std::min(h, avail - 2);
+        }
         return h < 1 ? 1 : h;
     };
 
@@ -161,20 +213,6 @@ std::string pick(const std::vector<std::string> &items, const std::string &promp
 
     refilter();
     draw();
-
-    // a VTIME-bounded read to complete escape sequences split across reads
-    auto peekread = [&](unsigned char *out, size_t size) -> ssize_t {
-        termios peek{};
-        tcgetattr(fd, &peek);
-        peek.c_cc[VMIN] = 0;
-        peek.c_cc[VTIME] = 1;
-        tcsetattr(fd, TCSANOW, &peek);
-        ssize_t m = ::read(fd, out, size);
-        peek.c_cc[VMIN] = 1;
-        peek.c_cc[VTIME] = 0;
-        tcsetattr(fd, TCSANOW, &peek);
-        return m;
-    };
 
     while (!done) {
         unsigned char buf[32];
