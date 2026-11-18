@@ -25,3 +25,22 @@ set(CMAKE_CXX_FLAGS_RELEASE "-O2")
 # Add the executable target for cmdrunner
 add_executable(cmdrunner ${CMDRUNNER_SOURCE_FILES})
 install(TARGETS cmdrunner DESTINATION bin)
+
+# Package configuration
+set(CPACK_PACKAGE_VENDOR "DRAGONTOS")
+set(CPACK_PACKAGE_DESCRIPTION ${PROJECT_DESCRIPTION})
+set(CPACK_PACKAGING_INSTALL_PREFIX "/usr")
+
+# DEBIAN specific settings
+set(CPACK_DEBIAN_PACKAGE_MAINTAINER "DRAGONTOS")
+set(CPACK_DEBIAN_PACKAGE_LICENSE "GPLv3")
+set(CPACK_DEBIAN_PACKAGE_RELEASE_DIST ON)
+
+# RPM specific settings
+set(CPACK_RPM_PACKAGE_LICENSE "GPLv3")
+set(CPACK_RPM_PACKAGE_RELEASE_DIST ON)
+
+# Set package generators (both DEB and RPM)
+set(CPACK_GENERATOR "DEB;RPM")
+
+include(CPack)
