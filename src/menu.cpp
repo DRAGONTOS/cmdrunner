@@ -46,8 +46,6 @@ std::string pick(const std::vector<std::string> &items, const std::string &promp
     terminal tty;
     const int fd = tty.fd();
 
-    writeall(fd, "\x1b[?25l"); // hide the cursor
-
     std::string query;
     std::string result;
     bool done = false;
@@ -73,8 +71,21 @@ std::string pick(const std::vector<std::string> &items, const std::string &promp
     };
 
     auto height = [&]() {
-        int h = tty.rows() - 1;
+        int h = tty.rows() - 2; // item lines + the info line + the prompt line
         return h < 1 ? 1 : h;
+    };
+
+    // the matched part of the text in bold, fzf style
+    auto highlight = [&](const std::string &text) {
+        if (query.empty()) {
+            return text;
+        }
+        const size_t pos = lower(text).find(lower(query));
+        if (pos == std::string::npos) {
+            return text;
+        }
+        return text.substr(0, pos) + "\x1b[1m" + text.substr(pos, query.size()) + "\x1b[0m" +
+               text.substr(pos + query.size());
     };
 
     auto draw = [&]() {
@@ -82,10 +93,7 @@ std::string pick(const std::vector<std::string> &items, const std::string &promp
         if (drawn > 0) {
             frame += "\r\x1b[" + std::to_string(drawn - 1) + "A\x1b[J";
         }
-
-        const std::string counter = "  \x1b[2m[" + std::to_string(filtered.size()) + "/" +
-                                    std::to_string(items.size()) + "]\x1b[0m";
-        frame += "\x1b[1;36m" + prompt + ">\x1b[0m " + query + "\x1b[K" + counter;
+        frame += "\x1b[?25l";
 
         const int h = height();
         if (sel < offset) {
@@ -99,15 +107,19 @@ std::string pick(const std::vector<std::string> &items, const std::string &promp
         const size_t end = std::min(filtered.size(), offset + static_cast<size_t>(h));
         for (size_t i = offset; i < end; ++i) {
             frame += "\n";
-            const std::string text = visible(items[filtered[i]], width - 2);
+            const std::string text = highlight(visible(items[filtered[i]], width - 2));
             if (i == sel) {
-                frame += "\x1b[1;7;36m " + text + " \x1b[0m\x1b[K";
+                frame += "\x1b[1;36m>\x1b[0m " + text + "\x1b[K";
             } else {
-                frame += " " + text + "\x1b[K";
+                frame += "  " + text + "\x1b[K";
             }
         }
 
-        drawn = 1 + static_cast<int>(end - offset);
+        // the info line and the prompt live at the bottom, fzf style
+        frame += "\n\x1b[2m  " + std::to_string(filtered.size()) + "/" + std::to_string(items.size()) + "\x1b[0m\x1b[K";
+        frame += "\n\x1b[1;36m" + (prompt.empty() ? ">" : prompt + " >") + "\x1b[0m " + query + "\x1b[K\x1b[?25h";
+
+        drawn = 2 + static_cast<int>(end - offset);
         writeall(fd, frame);
     };
 
@@ -189,18 +201,6 @@ std::string pick(const std::vector<std::string> &items, const std::string &promp
                 cancelledrun = true;
                 done = true;
                 break;
-            }
-            if (c == 'j' || c == 14) { // j, Ctrl-N
-                if (sel + 1 < filtered.size()) {
-                    ++sel;
-                }
-                continue;
-            }
-            if (c == 'k' || c == 16) { // k, Ctrl-P
-                if (sel > 0) {
-                    --sel;
-                }
-                continue;
             }
             if (c == 127 || c == 8) { // backspace
                 if (!query.empty()) {
