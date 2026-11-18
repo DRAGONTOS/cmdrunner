@@ -72,7 +72,8 @@ std::string shellquote(const std::string &value) {
 
 } // namespace
 
-int main(int argc, char **argv) {    std::string prompt = "menu";
+int main(int argc, char **argv) {
+    std::string prompt;
 
     // rofi/dmenu compatibility: -p takes the prompt, flags known to take a
     // value are skipped together with it, every other flag is ignored.

@@ -75,8 +75,9 @@ std::string pick(const std::vector<std::string> &items, const std::string &promp
         return h < 1 ? 1 : h;
     };
 
-    // the matched part of the text in bold, fzf style
-    auto highlight = [&](const std::string &text) {
+    // the matched part of the text in the accent color, fzf style; open/close
+    // bring back the surrounding line colors without touching the background
+    auto highlight = [&](const std::string &text, const std::string &open, const std::string &close) {
         if (query.empty()) {
             return text;
         }
@@ -84,7 +85,7 @@ std::string pick(const std::vector<std::string> &items, const std::string &promp
         if (pos == std::string::npos) {
             return text;
         }
-        return text.substr(0, pos) + "\x1b[1m" + text.substr(pos, query.size()) + "\x1b[0m" +
+        return text.substr(0, pos) + open + text.substr(pos, query.size()) + close +
                text.substr(pos + query.size());
     };
 
@@ -107,17 +108,26 @@ std::string pick(const std::vector<std::string> &items, const std::string &promp
         const size_t end = std::min(filtered.size(), offset + static_cast<size_t>(h));
         for (size_t i = offset; i < end; ++i) {
             frame += "\n";
-            const std::string text = highlight(visible(items[filtered[i]], width - 2));
+            const std::string text = visible(items[filtered[i]], width - 2);
             if (i == sel) {
-                frame += "\x1b[1;36m>\x1b[0m " + text + "\x1b[K";
+                frame += "\x1b[1;38;5;141;48;5;236m\xe2\x96\x8c\x1b[48;5;236m \x1b[1;38;5;254m" +
+                         highlight(text, "\x1b[38;5;141m", "\x1b[22;38;5;254m") + "\x1b[K\x1b[0m";
             } else {
-                frame += "  " + text + "\x1b[K";
+                frame += "\x1b[38;5;236m\xe2\x96\x8c\x1b[0m " +
+                         highlight(text, "\x1b[1;38;5;141m", "\x1b[22;39m") + "\x1b[K";
             }
         }
 
         // the info line and the prompt live at the bottom, fzf style
-        frame += "\n\x1b[2m  " + std::to_string(filtered.size()) + "/" + std::to_string(items.size()) + "\x1b[0m\x1b[K";
-        frame += "\n\x1b[1;36m" + (prompt.empty() ? ">" : prompt + " >") + "\x1b[0m " + query + "\x1b[K\x1b[?25h";
+        const std::string count = std::to_string(filtered.size()) + "/" + std::to_string(items.size());
+        std::string rule;
+        for (int i = 0; i < tty.cols() - 3 - static_cast<int>(count.size()); ++i) {
+            rule += "\xe2\x94\x80";
+        }
+        frame += "\n  \x1b[38;5;141m" + count + "\x1b[38;5;60m " + rule + "\x1b[0m\x1b[K";
+
+        const std::string pfx = prompt.empty() ? "> " : (prompt.back() == ' ' ? prompt + "> " : prompt + " >");
+        frame += "\n\x1b[1;38;5;141m" + pfx + "\x1b[0m\x1b[1m" + query + "\x1b[K\x1b[?25h";
 
         drawn = 2 + static_cast<int>(end - offset);
         writeall(fd, frame);
