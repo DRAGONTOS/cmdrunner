@@ -89,13 +89,14 @@ std::string pick(const std::vector<std::string> &items, const std::string &promp
                text.substr(pos + query.size());
     };
 
-    // cmdrunner owns the whole terminal window, fzf --layout=reverse style:
-    // the prompt on top, the info line under it, the items below.
+    // cmdrunner draws right under the shell prompt: --layout=reverse puts the
+    // search on top, --layout=default at the bottom. only the menu's own lines
+    // are touched, never the rest of the screen.
     auto draw = [&]() {
         std::string frame;
-        if (reverse) {
-            frame += "\x1b[H\x1b[J";
-        } else if (drawn > 0) {
+        if (drawn == 0) {
+            frame += "\n"; // the menu starts one line below the prompt
+        } else {
             frame += "\r\x1b[" + std::to_string(drawn - 1) + "A\x1b[J";
         }
         frame += "\x1b[?25l";
@@ -132,33 +133,24 @@ std::string pick(const std::vector<std::string> &items, const std::string &promp
         const std::string promptrow = "\x1b[1;38;5;141m" + pfx + "\x1b[0m\x1b[1m" + query + "\x1b[K";
 
         if (reverse) {
-            // prompt on top, info under it, the item area padded to fill the window
+            // the search and the info line on top, the items below
             frame += promptrow + "\n" + inforow;
             for (size_t i = offset; i < end; ++i) {
                 frame += "\n" + itemline(i);
             }
-            for (int i = static_cast<int>(end - offset); i < h; ++i) {
-                frame += "\n\x1b[K";
-            }
-            // the cursor belongs on the prompt line, right after the query
-            frame += "\x1b[1;" + std::to_string(pfx.size() + 1) + "H\x1b[?25h";
         } else {
-            // inline: the items, then the info line, then the prompt at the bottom
+            // the items, then the info line, then the search at the bottom
             for (size_t i = offset; i < end; ++i) {
                 frame += "\n" + itemline(i);
             }
-            frame += "\n" + inforow + "\n" + promptrow + "\x1b[?25h";
-            drawn = 2 + static_cast<int>(end - offset);
+            frame += "\n" + inforow + "\n" + promptrow;
         }
 
+        drawn = 2 + static_cast<int>(end - offset);
         writeall(fd, frame);
     };
 
     auto cleanup = [&]() {
-        if (reverse) {
-            writeall(fd, "\x1b[H\x1b[J\x1b[" + std::to_string(tty.rows()) + ";1H\x1b[?25h");
-            return;
-        }
         std::string out;
         if (drawn > 0) {
             out = "\r\x1b[" + std::to_string(drawn - 1) + "A\x1b[J";

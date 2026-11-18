@@ -8,8 +8,8 @@
 struct cancelled {};
 
 // shows the dmenu-style picker on /dev/tty and returns the picked line.
-// reverse owns the whole terminal window with the prompt on top (fzf
-// --layout=reverse style); the default layout renders inline at the cursor.
+// reverse puts the search on top and draws right under the shell prompt;
+// the default layout renders with the search at the bottom.
 std::string pick(const std::vector<std::string> &items, const std::string &prompt, bool reverse);
 
 #endif
