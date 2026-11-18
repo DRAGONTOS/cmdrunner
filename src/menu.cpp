@@ -127,6 +127,25 @@ std::string pick(const std::vector<std::string> &items, const std::string &promp
         return h < 1 ? 1 : h;
     };
 
+    // smooth scrolling with a 3-line margin, like vim's scrolloff: the view
+    // starts moving before the selection reaches an edge, and short lists keep
+    // the window at its full height
+    auto scroll = [&]() {
+        const size_t hs = static_cast<size_t>(height());
+        const size_t m = 3;
+        if (filtered.size() <= hs) {
+            offset = 0;
+            return;
+        }
+        const size_t maxoff = filtered.size() - hs;
+        if (sel + m >= offset + hs) {
+            offset = std::min(sel + m - hs + 1, maxoff);
+        }
+        if (sel < offset + m) {
+            offset = sel > m ? sel - m : 0;
+        }
+    };
+
     // the matched part of the text in the accent color, fzf style; open/close
     // bring back the surrounding line colors without touching the background
     auto highlight = [&](const std::string &text, const std::string &open, const std::string &close) {
@@ -145,6 +164,8 @@ std::string pick(const std::vector<std::string> &items, const std::string &promp
     // search on top, --layout=default at the bottom. only the menu's own lines
     // are touched, never the rest of the screen.
     auto draw = [&]() {
+        scroll();
+
         std::string frame;
         if (drawn == 0) {
             frame += "\n"; // the menu starts one line below the prompt
@@ -154,15 +175,9 @@ std::string pick(const std::vector<std::string> &items, const std::string &promp
         frame += "\x1b[?25l";
 
         const int h = height();
-        if (sel < offset) {
-            offset = sel;
-        }
-        if (sel >= offset + static_cast<size_t>(h)) {
-            offset = sel - static_cast<size_t>(h) + 1;
-        }
-
+        const size_t hs = static_cast<size_t>(h);
         const int width = tty.cols() - 1;
-        const size_t end = std::min(filtered.size(), offset + static_cast<size_t>(h));
+        const size_t end = std::min(filtered.size(), offset + hs);
 
         auto itemline = [&](size_t i) {
             const std::string text = visible(items[filtered[i]], width - 2);
@@ -190,15 +205,22 @@ std::string pick(const std::vector<std::string> &items, const std::string &promp
             for (size_t i = offset; i < end; ++i) {
                 frame += "\n" + itemline(i);
             }
+            // the item window keeps its full height even for short lists
+            for (size_t i = end - offset; i < hs; ++i) {
+                frame += "\n\x1b[K";
+            }
         } else {
             // the items, then the info line, then the search at the bottom
             for (size_t i = offset; i < end; ++i) {
                 frame += "\n" + itemline(i);
             }
+            for (size_t i = end - offset; i < hs; ++i) {
+                frame += "\n\x1b[K";
+            }
             frame += "\n" + inforow + "\n" + promptrow;
         }
 
-        drawn = 2 + static_cast<int>(end - offset);
+        drawn = 2 + h;
         writeall(fd, frame);
     };
 
