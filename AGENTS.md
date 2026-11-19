@@ -38,8 +38,7 @@ makepkg -si PKGBUILD       # Arch
 - GPLv3, keep the LICENSE.
 - Commit subjects are lowercase with a type prefix and no body: `fix:`, `added:`, `bump:`, `cleanup:`, `major:`, `pkgbuild:`. Version bumps: `Bump: bumped to (x.y.z)`.
 - The version in `props.json` is the single source of truth; bump it and `line-count` together.
-- **Every tagged release shows what changed**: the builds workflow generates the release notes from the commits since the previous tag.
-- Don't add a comment where the code can say it itself; the codebase does comment, but sparingly — follow the surrounding file.
+- **Every tagged release shows what changed**: the builds workflow generates the release notes from the commits since the previous tag.- Don't add a comment where the code can say it itself; the codebase does comment, but sparingly — follow the surrounding file.
 
 ## Before pushing
 
@@ -64,5 +63,6 @@ makepkg -si PKGBUILD       # Arch
 - When stdout is piped (rapidmenu's flow) everything still works: the menu draws on /dev/tty regardless.
 - `/dev/tty` missing (no controlling terminal) exits 1 with a message — never abort.
 - A new CMake project needs the full CPack block (`include(CPack)`, vendor/maintainer, `CPACK_GENERATOR`) or `cpack -G DEB` fails in CI with `CPack project name not specified` — this cost the first cmdrunner CI run.
-- The `latest` git tag on the remote is created/moved by the rolling release, not a version tag — don't confuse them.
+- **The `latest` rolling tag pollutes "previous tag" lookups** — the release-notes step must filter to version tags only (`grep -E '^v[0-9]'`), or `git log latest..v0.2.0` collapses to almost nothing because the rolling release moves `latest` on every master push. This cost the first v0.2.0 release its changelog (`c01f576`).
+- **The dev machine can mask a missing vendored dependency** — this machine has cpptoml in `/usr/include`, so the config feature built fine locally with the vendored `external/` copy entirely absent; CI caught it. When touching vendored headers, trust CI, not the local build.
 - ubuntu-24.04's default g++ cannot take `-std=c++26` — the workflow pins g++-14.
