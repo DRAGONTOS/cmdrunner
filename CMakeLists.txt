@@ -26,6 +26,10 @@ set(CMAKE_CXX_FLAGS_RELEASE "-O2")
 add_executable(cmdrunner ${CMDRUNNER_SOURCE_FILES})
 install(TARGETS cmdrunner DESTINATION bin)
 
+# Include directories (cpptoml is vendored in external/)
+target_include_directories(cmdrunner PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/external)
+
 # Package configuration
 set(CPACK_PACKAGE_VENDOR "DRAGONTOS")
 set(CPACK_PACKAGE_DESCRIPTION ${PROJECT_DESCRIPTION})
