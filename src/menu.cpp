@@ -118,11 +118,15 @@ std::string pick(const std::vector<std::string> &items, const std::string &promp
     const int cursorrowat = cursorrow();
     const int avail = cursorrowat > 0 ? tty.rows() - cursorrowat : -1;
 
+    // when the space below the prompt is too small for a usable menu, the
+    // terminal scrolls up while the menu draws and the prompt stays visible
+    // above it — the menu just never gets taller than the screen allows
+    const int minitems = 10;
+
     auto height = [&]() {
         int h = tty.rows() - 2; // the prompt line + the info line + the item lines
         if (avail >= 0) {
-            // never scroll the prompt away: cap the items to the space below it
-            h = std::min(h, avail - 2);
+            h = std::min(h, std::max(minitems, avail - 2));
         }
         return h < 1 ? 1 : h;
     };
