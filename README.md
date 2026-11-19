@@ -34,6 +34,23 @@ prompt = ""          # shown in front of the query
 Flags override the config (`-p`, `--layout`). A missing file is fine; a
 broken one warns and keeps the defaults.
 
+# Keybind
+
+To open cmdrunner from zsh with Alt+D, put this in `~/.zshrc`:
+
+```zsh
+cmdrunner-widget() {
+  cmdrunner
+  zle reset-prompt
+}
+zle -N cmdrunner-widget
+bindkey '\ed' cmdrunner-widget
+```
+
+`zle reset-prompt` redraws the prompt after the menu closes — needed for
+multi-line prompts. (Alt+D is kill-word in the default emacs keymap; this
+replaces it.)
+
 # Installing
 
 From source:
