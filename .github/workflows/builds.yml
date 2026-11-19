@@ -48,7 +48,7 @@ jobs:
         id: notes
         if: startsWith(github.ref, 'refs/tags/')
         run: |
-          prev=$(git tag --sort=-creatordate | grep -v "^$GITHUB_REF_NAME$" | head -1)
+          prev=$(git tag --sort=-creatordate | grep -E '^v[0-9]' | grep -v "^$GITHUB_REF_NAME$" | head -1)
           {
             echo "notes<<CHANGES"
             echo "Binary for x86_64 Linux, a deb and an rpm. Build it yourself with make all if your distro is not covered."
