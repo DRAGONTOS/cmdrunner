@@ -1,6 +1,6 @@
 # Agent guide
 
-cmdrunner is a dmenu/rofi-compatible command runner inside the terminal: it reads choices one per line from stdin, shows a filterable menu on /dev/tty and prints the picked line to stdout — a drop-in replacement for `rofi -dmenu`/dmenu scripts, so rapidmenu works with it unchanged. Interaction is fzf-styled (type to filter, arrow keys, Enter, Esc; matched text bold, pointer + info line, prompt at the bottom). Written in C++26 on CMake and Ninja, no external dependencies.
+cmdrunner is a dmenu/rofi-compatible command runner inside the terminal: it reads choices one per line from stdin, shows a filterable menu on /dev/tty and prints the picked line to stdout — a drop-in replacement for `rofi -dmenu`/dmenu scripts, so rapidmenu works with it unchanged. Bare run lists the `$PATH` commands and executes the pick (`dmenu_run` behavior). The menu draws right under the shell prompt (never taking the screen) and looks like fzf with a purple accent: type to filter, arrow keys, Enter, Esc. Written in C++26 on CMake and Ninja, no external dependencies.
 
 Cross-session handoff notes for this project live in `~/.local/share/agents/cmdrunner-handoff.md`. Read that file first when resuming after a context reset, and update it when state changes (commits, queue changes, new gotchas).
 
@@ -45,6 +45,7 @@ makepkg -si PKGBUILD       # Arch
 
 - `make all` builds clean.
 - A `-p <prompt>` run with rofi-style flags picked an item (or cancelled) — verify the compatibility contract: stdin in, pick out, exit 0 on pick / 1 on cancel.
+- The under-prompt placement held in a pty harness that answers the DSR query: menu under the prompt, fixed-height window, 3-row scrolloff, 10-item minimum at the screen bottom.
 - `props.json`, `line-count` and any packaging metadata agree on the version.
 
 ## Code style
@@ -52,12 +53,12 @@ makepkg -si PKGBUILD       # Arch
 - C++26 (`set(CMAKE_CXX_STANDARD 26)`), target `cmdrunner`, sources globbed from `src/` recursively — a new file needs no CMake edit.
 - Indentation is a mix of 2 and 4 spaces across files; match the file you are editing rather than reformatting.
 - Errors: plain `exit(1)` with stderr prints, `throw` for fatal setup failures (caught in `main.cpp`); keep new errors consistent with their file.
-- No test suite exists. Verification is manual: `socat` can fake the pty — `(sleep 1; printf '\r') | socat - 'EXEC:<script that pipes items into cmdrunner>,pty,ctty,setsid,raw,echo=0'`.
+- No test suite exists. Verification is manual with pty harnesses: a socat one `(sleep 1; printf '\r') | socat - 'EXEC:<script that pipes items into cmdrunner>,pty,ctty,setsid,raw,echo=0'` covers keys and the frame bytes, but it cannot answer the DSR query — a small Python `pty`-module harness that replies `\x1b[{row};3R` is needed for the height-cap tests (see the handoff for the recipe).
 
 ## Gotchas
 
 - **stdin carries the choices, /dev/tty carries the keys and the drawing** — stdin is a pipe in the rapidmenu flow (already consumed), so keyboard input must never be read from stdin. The mode split is `isatty(0)`: tty stdin → PATH launcher that executes; piped stdin → print-only dmenu contract.
-- **The DSR cursor query at startup** (`\x1b[6n`) is what keeps the menu under the prompt without scrolling — its reply is consumed from the tty input, so it must happen before the key loop, and a keystroke typed within the 0.5s window can be swallowed. The socat pty harness does not answer DSR (falls back to the full height); the Python `ptyrun.py` in /tmp answers it — real terminals always do.
+- **The DSR cursor query at startup** (`\x1b[6n`) is what keeps the menu under the prompt without scrolling — its reply is consumed from the tty input, so it must happen before the key loop, and a keystroke typed within the 0.5s window can be swallowed. The socat pty harness does not answer DSR (falls back to the full height); a Python `pty`-module harness that replies `\x1b[{row};3R` is needed for the height-cap tests — the recipe lives in the handoff, real terminals always answer.
 - The selection goes to stdout, the menu UI to /dev/tty — that split is what lets rapidmenu's `popen` capture the pick while the user sees the menu.
 - When stdout is piped (rapidmenu's flow) everything still works: the menu draws on /dev/tty regardless.
 - `/dev/tty` missing (no controlling terminal) exits 1 with a message — never abort.
