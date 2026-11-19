@@ -22,6 +22,18 @@ so it is a drop-in replacement for `rofi -dmenu` and dmenu scripts.
 
 None beyond a compiler — no external dependencies.
 
+# Configuration
+
+`~/.config/cmdrunner/config.toml` is read when it exists:
+
+```toml
+layout = "reverse"   # "reverse" (search on top, the default) or "default" (search at the bottom)
+prompt = ""          # shown in front of the query
+```
+
+Flags override the config (`-p`, `--layout`). A missing file is fine; a
+broken one warns and keeps the defaults.
+
 # Installing
 
 From source:

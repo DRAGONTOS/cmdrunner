@@ -6,9 +6,49 @@
 #include <string>
 #include <unistd.h>
 #include <vector>
+#include <cpptoml.h>
 #include "includes/menu.hpp"
 
 namespace {
+
+// the user config at ~/.config/cmdrunner/config.toml; a missing file is fine,
+// a broken one warns and keeps the defaults
+struct options {
+    std::string prompt;
+    bool reverse = true;
+};
+
+options loadconfig() {
+    options o;
+    const char *home = getenv("HOME");
+    if (!home) {
+        return o;
+    }
+    const std::filesystem::path file = std::filesystem::path(home) / ".config" / "cmdrunner" / "config.toml";
+    std::error_code ec;
+    if (!std::filesystem::exists(file, ec) || ec) {
+        return o;
+    }
+
+    try {
+        auto config = cpptoml::parse_file(file.string());
+        if (const auto layout = config->get_as<std::string>("layout")) {
+            if (*layout == "reverse") {
+                o.reverse = true;
+            } else if (*layout == "default") {
+                o.reverse = false;
+            } else {
+                std::cerr << "cmdrunner: unknown layout '" << *layout << "' in " << file.string() << "\n";
+            }
+        }
+        if (const auto prompt = config->get_as<std::string>("prompt")) {
+            o.prompt = *prompt;
+        }
+    } catch (const std::exception &e) {
+        std::cerr << "cmdrunner: could not read " << file.string() << ": " << e.what() << "\n";
+    }
+    return o;
+}
 
 // every executable found in the PATH dirs, deduped by name and sorted — the dmenu_run list
 std::vector<std::string> pathcommands() {
@@ -73,8 +113,9 @@ std::string shellquote(const std::string &value) {
 } // namespace
 
 int main(int argc, char **argv) {
-    std::string prompt;
-    bool reverse = true; // --layout=reverse is the default
+    options opts = loadconfig();
+    std::string prompt = opts.prompt;
+    bool reverse = opts.reverse;
 
     // rofi/dmenu compatibility: -p takes the prompt, flags known to take a
     // value are skipped together with it, every other flag is ignored.
